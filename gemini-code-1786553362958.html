@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kartikey Ki Masti - Local Video Merger</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- FFmpeg.wasm Script -->
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+  <style>
+    body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .card { border-radius: 15px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .video-item { background: #ffffff; border: 1px solid #e9ecef; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .btn-custom { border-radius: 8px; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        
+        <!-- Header -->
+        <div class="text-center mb-4">
+          <h2 class="fw-bold text-primary">🎬 Kartikey Ki Masti - Browser Video Merger</h2>
+          <p class="text-muted">100% Local Browser Processing (No Uploads Needed)</p>
+        </div>
+
+        <!-- Main Card -->
+        <div class="card p-4 mb-4">
+          <h5 class="fw-bold mb-3">1. Select & Append Videos</h5>
+          
+          <!-- Dynamic Video List Container -->
+          <div id="videoList">
+            <!-- Initial Source Video Item -->
+            <div class="video-item d-flex align-items-center gap-2">
+              <span class="badge bg-primary">Source Video</span>
+              <input type="file" class="form-control video-input" accept="video/mp4,video/*">
+            </div>
+          </div>
+
+          <!-- Add More Button -->
+          <button id="addVideoBtn" class="btn btn-outline-secondary btn-custom mt-2">+ Add Another Video</button>
+
+          <hr class="my-4">
+
+          <h5 class="fw-bold mb-3">2. Merge Settings</h5>
+          <div class="mb-3">
+            <label class="form-label">Merged Video Output Name:</label>
+            <input type="text" id="outputName" class="form-control" value="kartikey_final_merged.mp4">
+          </div>
+
+          <!-- Merge Action Button -->
+          <button id="mergeBtn" class="btn btn-success btn-lg w-100 btn-custom mt-2">
+            🚀 Merge Videos Locally
+          </button>
+
+          <!-- Progress Bar -->
+          <div id="progressContainer" class="mt-4 d-none">
+            <div class="d-flex justify-content-between mb-1">
+              <span id="statusText" class="fw-bold text-primary">Processing...</span>
+            </div>
+            <div class="progress" style="height: 20px;">
+              <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Download & Output Section -->
+        <div id="resultCard" class="card p-4 d-none">
+          <h4 class="fw-bold text-success text-center mb-3">🎉 Merging Completed!</h4>
+          
+          <!-- Video Preview -->
+          <video id="previewVideo" controls class="w-100 rounded mb-3" style="max-height: 400px;"></video>
+          
+          <!-- Download Button -->
+          <a id="downloadBtn" class="btn btn-primary btn-lg btn-custom w-100" download="merged_video.mp4">
+            ⬇️ Download Merged Video
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
+
+    const videoList = document.getElementById('videoList');
+    const addVideoBtn = document.getElementById('addVideoBtn');
+    const mergeBtn = document.getElementById('mergeBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const statusText = document.getElementById('statusText');
+    const resultCard = document.getElementById('resultCard');
+    const previewVideo = document.getElementById('previewVideo');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    // Add Video Input Row
+    addVideoBtn.addEventListener('click', () => {
+      const count = videoList.children.length + 1;
+      const div = document.createElement('div');
+      div.className = 'video-item d-flex align-items-center gap-2 mt-2';
+      div.innerHTML = `
+        <span class="badge bg-secondary">Video ${count}</span>
+        <input type="file" class="form-control video-input" accept="video/mp4,video/*">
+        <button class="btn btn-danger btn-sm remove-btn">✕</button>
+      `;
+      videoList.appendChild(div);
+
+      div.querySelector('.remove-btn').addEventListener('click', () => div.remove());
+    });
+
+    // Merge Process
+    mergeBtn.addEventListener('click', async () => {
+      const inputs = document.querySelectorAll('.video-input');
+      const files = [];
+      inputs.forEach(input => {
+        if (input.files[0]) files.push(input.files[0]);
+      });
+
+      if (files.length < 2) {
+        alert('⚠️ मर्च करने के लिए कम से कम 2 वीडियो चुनना ज़रूरी है!');
+        return;
+      }
+
+      // UI Update
+      mergeBtn.disabled = true;
+      progressContainer.classList.remove('d-none');
+      resultCard.classList.add('d-none');
+      progressBar.style.width = '10%';
+      progressBar.innerText = '10%';
+      statusText.innerText = 'Loading FFmpeg Engine...';
+
+      if (!ffmpeg.isLoaded()) {
+        await ffmpeg.load();
+      }
+
+      statusText.innerText = 'Writing files to memory...';
+      let fileListTxt = '';
+
+      for (let i = 0; i < files.length; i++) {
+        const fileName = `input${i}.mp4`;
+        ffmpeg.FS('writeFile', fileName, await fetchFile(files[i]));
+        fileListTxt += `file '${fileName}'\n`;
+      }
+
+      ffmpeg.FS('writeFile', 'concat_list.txt', fileListTxt);
+
+      statusText.innerText = 'Merging videos locally...';
+      progressBar.style.width = '50%';
+      progressBar.innerText = '50%';
+
+      // Run FFmpeg Concatenation Command
+      await ffmpeg.run('-f', 'concat', '-safe', '0', '-i', 'concat_list.txt', '-c', 'copy', 'output.mp4');
+
+      statusText.innerText = 'Preparing Download...';
+      progressBar.style.width = '90%';
+      progressBar.innerText = '90%';
+
+      const data = ffmpeg.FS('readFile', 'output.mp4');
+      const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+      const videoUrl = URL.createObjectURL(videoBlob);
+
+      // Display Results
+      previewVideo.src = videoUrl;
+      const customName = document.getElementById('outputName').value || 'merged_video.mp4';
+      downloadBtn.href = videoUrl;
+      downloadBtn.download = customName;
+
+      progressBar.style.width = '100%';
+      progressBar.innerText = '100%';
+      statusText.innerText = 'Completed!';
+      
+      resultCard.classList.remove('d-none');
+      mergeBtn.disabled = false;
+    });
+  </script>
+</body>
+</html>
